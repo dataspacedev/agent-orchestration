@@ -1,0 +1,23 @@
+apiVersion: agents.orchestration.io/v1alpha1
+kind: Agent
+metadata:
+  name: example-agent
+  namespace: default
+spec:
+  image: "ghcr.io/example/my-agent:v1.0.0"
+  port: 8080
+  resources:
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+  config:
+    LOG_LEVEL: "info"
+    ENVIRONMENT: "production"
+  # secretName: my-agent-secrets   # uncomment to inject an existing Secret as env vars
+  scaling:
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70

@@ -1,20 +1,26 @@
-FROM python:3.11-slim AS base
+FROM python:3.13-slim AS base
 
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# Install dependencies
 FROM base AS deps
 COPY pyproject.toml .
-RUN pip install --no-cache-dir ".[dev]" 2>/dev/null || pip install --no-cache-dir .
+RUN pip install --no-cache-dir .
 
-# Production image
 FROM base AS production
-COPY --from=deps /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+
+RUN addgroup --system --gid 1000 app && \
+    adduser --system --uid 1000 --gid 1000 --no-create-home app
+
+COPY --from=deps /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=deps /usr/local/bin /usr/local/bin
 COPY app/ ./app/
+COPY alembic/ ./alembic/
+COPY alembic.ini .
+
+USER 1000
 
 EXPOSE 8000
 

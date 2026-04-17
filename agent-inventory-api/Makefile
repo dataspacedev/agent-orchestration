@@ -12,10 +12,14 @@ HOST       := 0.0.0.0
 PORT       := 8005
 MSG        ?= "new migration"
 
+IMG        ?= agent-inventory-api:latest
+NAMESPACE  ?= agent-system
+
 .DEFAULT_GOAL := help
 
 .PHONY: help venv activate install install-dev run test lint typecheck check clean \
-        db-up db-down db-migrate db-rollback db-revision db-reset
+        db-up db-down db-migrate db-rollback db-revision db-reset \
+        docker-build docker-push deploy undeploy port-forward k8s-logs k8s-status
 
 help:
 	@echo "Usage: make <target>"
@@ -37,6 +41,14 @@ help:
 	@echo "  db-rollback    Roll back last migration (downgrade -1)"
 	@echo "  db-revision    Generate new migration  (MSG=\"describe change\")"
 	@echo "  db-reset       Drop and recreate all tables (dev only)"
+	@echo ""
+	@echo "  docker-build   Build the container image (IMG=$(IMG))"
+	@echo "  docker-push    Push the container image to a registry"
+	@echo "  deploy         Build image and deploy API + postgres to the cluster"
+	@echo "  undeploy       Remove API and postgres from the cluster"
+	@echo "  port-forward   Forward cluster port to localhost:$(PORT)"
+	@echo "  k8s-logs       Tail API pod logs"
+	@echo "  k8s-status     Show pods, services, and deployments in $(NAMESPACE)"
 
 # ── Environment ──────────────────────────────────────────────────────────────
 
@@ -111,3 +123,37 @@ clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
 	find . -type f -name "*.pyc" -delete
 	@echo "Cleaned."
+
+# ── Kubernetes ────────────────────────────────────────────────────────────────
+
+docker-build:
+	docker build --platform linux/arm64 -t $(IMG) .
+
+docker-push:
+	docker push $(IMG)
+
+deploy: docker-build
+	kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
+	kubectl apply -f config/postgres/secret.yaml
+	kubectl apply -f config/postgres/postgres.yaml
+	kubectl -n $(NAMESPACE) rollout status deployment/postgres --timeout=120s
+	kubectl apply -f config/api/configmap.yaml
+	kubectl apply -f config/api/api.yaml
+	kubectl -n $(NAMESPACE) rollout status deployment/agent-inventory-api --timeout=120s
+	@echo "Deploy complete. Run 'make port-forward' to access the API at http://localhost:$(PORT)"
+
+undeploy:
+	kubectl delete -f config/api/api.yaml --ignore-not-found
+	kubectl delete -f config/api/configmap.yaml --ignore-not-found
+	kubectl delete -f config/postgres/postgres.yaml --ignore-not-found
+	kubectl delete -f config/postgres/secret.yaml --ignore-not-found
+
+port-forward:
+	kubectl -n $(NAMESPACE) port-forward svc/agent-inventory-api $(PORT):8000
+
+k8s-logs:
+	kubectl -n $(NAMESPACE) logs -l app.kubernetes.io/name=agent-inventory-api -f --max-log-requests=5
+
+k8s-status:
+	kubectl -n $(NAMESPACE) get pods,services,deployments,pvc \
+	  -l 'app.kubernetes.io/name in (agent-inventory-api,postgres)'
