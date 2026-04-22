@@ -1,0 +1,92 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: clusteragentpolicies.agents.orchestration.io
+spec:
+  group: agents.orchestration.io
+  names:
+    kind: ClusterAgentPolicy
+    listKind: ClusterAgentPolicyList
+    plural: clusteragentpolicies
+    shortNames:
+    - cap
+    singular: clusteragentpolicy
+  scope: Cluster
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ClusterAgentPolicy is the Schema for the clusteragentpolicies
+          API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ClusterAgentPolicySpec defines the desired state of ClusterAgentPolicy.
+            properties:
+              auth:
+                description: Auth defines the authentication settings applied cluster-wide.
+                properties:
+                  mode:
+                    description: Mode is the authentication mode (e.g. "jwt", "mtls",
+                      "none").
+                    type: string
+                  tokenAudience:
+                    description: TokenAudience is the expected audience claim in tokens
+                      presented to this agent.
+                    type: string
+                type: object
+              otel:
+                description: OTEL defines the OpenTelemetry settings applied cluster-wide.
+                properties:
+                  endpoint:
+                    description: Endpoint is the OTLP gRPC/HTTP endpoint to export
+                      traces and metrics.
+                    type: string
+                  sampling:
+                    description: Sampling is the trace sampling rate in the range
+                      [0, 1].
+                    type: number
+                type: object
+              resilience:
+                description: Resilience defines the resilience settings applied cluster-wide.
+                properties:
+                  retries:
+                    description: Retries is the maximum number of retry attempts on
+                      transient failures.
+                    format: int32
+                    type: integer
+                  timeoutMs:
+                    description: TimeoutMs is the per-request timeout in milliseconds.
+                    format: int32
+                    type: integer
+                type: object
+            type: object
+          status:
+            description: |-
+              ClusterAgentPolicyStatus defines the observed state of ClusterAgentPolicy.
+              Reserved for future conditions.
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

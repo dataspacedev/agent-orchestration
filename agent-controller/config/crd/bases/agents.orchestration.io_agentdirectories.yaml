@@ -1,0 +1,90 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.1
+  name: agentdirectories.agents.orchestration.io
+spec:
+  group: agents.orchestration.io
+  names:
+    kind: AgentDirectory
+    listKind: AgentDirectoryList
+    plural: agentdirectories
+    shortNames:
+    - ad
+    singular: agentdirectory
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.cardHash
+      name: CardHash
+      type: string
+    - jsonPath: .spec.readyAt
+      name: ReadyAt
+      type: date
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: AgentDirectory is the Schema for the agentdirectories API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AgentDirectorySpec defines the desired state of AgentDirectory.
+            properties:
+              agentName:
+                description: AgentName is the canonical name of the agent.
+                type: string
+              cardHash:
+                description: CardHash is the SHA-256 hash of the agent card JSON,
+                  used for integrity checks.
+                type: string
+              readyAt:
+                description: ReadyAt is the timestamp when the agent last became ready.
+                format: date-time
+                type: string
+              skills:
+                description: Skills is the list of skill identifiers the agent advertises.
+                items:
+                  type: string
+                type: array
+              url:
+                description: URL is the base URL at which the agent is reachable.
+                type: string
+              version:
+                description: Version is the semantic version of the agent.
+                type: string
+            required:
+            - agentName
+            - url
+            - version
+            type: object
+          status:
+            description: |-
+              AgentDirectoryStatus defines the observed state of AgentDirectory.
+              Reserved for future conditions.
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

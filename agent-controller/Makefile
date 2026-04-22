@@ -18,7 +18,7 @@ generate: controller-gen
 ## manifests: regenerate CRD and RBAC manifests from kubebuilder markers
 .PHONY: manifests
 manifests: controller-gen
-	$(CONTROLLER_GEN) rbac:roleName=agent-controller-role crd paths="./..." \
+	$(CONTROLLER_GEN) rbac:roleName=agent-controller-role crd:allowDangerousTypes=true paths="./..." \
 		output:crd:artifacts:config=config/crd/bases \
 		output:rbac:artifacts:config=config/rbac
 
