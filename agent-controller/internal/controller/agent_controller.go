@@ -52,18 +52,33 @@ func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	if err := r.reconcileServiceAccount(ctx, agent); err != nil {
+		if apierrors.IsConflict(err) {
+			return ctrl.Result{Requeue: true}, nil
+		}
 		return r.markDegraded(ctx, agent, "ServiceAccountFailed", err)
 	}
 	if err := r.reconcileConfigMap(ctx, agent); err != nil {
+		if apierrors.IsConflict(err) {
+			return ctrl.Result{Requeue: true}, nil
+		}
 		return r.markDegraded(ctx, agent, "ConfigMapFailed", err)
 	}
 	if err := r.reconcileDeployment(ctx, agent); err != nil {
+		if apierrors.IsConflict(err) {
+			return ctrl.Result{Requeue: true}, nil
+		}
 		return r.markDegraded(ctx, agent, "DeploymentFailed", err)
 	}
 	if err := r.reconcileService(ctx, agent); err != nil {
+		if apierrors.IsConflict(err) {
+			return ctrl.Result{Requeue: true}, nil
+		}
 		return r.markDegraded(ctx, agent, "ServiceFailed", err)
 	}
 	if err := r.reconcileHPA(ctx, agent); err != nil {
+		if apierrors.IsConflict(err) {
+			return ctrl.Result{Requeue: true}, nil
+		}
 		return r.markDegraded(ctx, agent, "HPAFailed", err)
 	}
 

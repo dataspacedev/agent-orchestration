@@ -1,0 +1,23 @@
+apiVersion: agents.orchestration.io/v1alpha1
+kind: Agent
+metadata:
+  name: example-agent-v010
+  namespace: default
+spec:
+  image: "ghcr.io/example/example-agent:0.1.0"
+  port: 8080
+  resources:
+    limits:
+      cpu: "500m"
+      memory: "256Mi"
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+  config:
+    LOG_LEVEL: "info"
+    ENVIRONMENT: "production"
+    AGENT_URL: "http://example-agent-v010.default.svc.cluster.local:8080"
+  scaling:
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 80

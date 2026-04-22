@@ -12,5 +12,12 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/agent_inventory"
 
+    k8s_namespace: str = "agent-system"
+    k8s_in_cluster: bool = True
+
+    outbox_poll_interval: float = 5.0
+    outbox_max_retries: int = 5
+    outbox_processing_timeout: float = 300.0
+
 
 settings = Settings()
