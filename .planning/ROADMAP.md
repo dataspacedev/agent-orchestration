@@ -34,7 +34,15 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. ClusterAgentPolicy CR is applied to the cluster with auth, OTEL, and resilience defaults; AgentPolicyReconciler merges those defaults into namespace AgentPolicy objects.
 **Hard gates (must be verified before Phase 2 begins)**: task-store HA confirmed (2+ replicas, PgBouncer healthy, backup tested); AgentDirectory CRD applies cleanly to production cluster; registry-announcer stable with no divergence across 10+ restart cycles.
 **Implementation note**: Fix `AutomountServiceAccountToken: ptr(false)` to `ptr(true)` in `buildDeploymentSpec` for sidecar-injected pods in this phase. Add CI check: `make generate && git diff --exit-code` blocking any PR that adds `*_types.go` without re-running controller-gen.
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — CRD type definitions (AgentDirectory, ClusterAgentPolicy, AgentPolicy) + make generate + CI enforcement
+- [ ] 01-02-PLAN.md — AgentReconciler: sidecar injection, ReadinessGate, reconcileAgentDirectory, fix AutomountServiceAccountToken
+- [ ] 01-03-PLAN.md — registry-announcer Go binary: announce loop, cardHash idempotency, secondary write queue
+- [ ] 01-04-PLAN.md — task-store FastAPI service: HTTP routes, SQLAlchemy, Postgres + PgBouncer manifests (replicas: 2)
+- [ ] 01-05-PLAN.md — core-tools-lib: RemoteTaskStoreClient, TaskStore.from_env(), update create_agent_app()
+- [ ] 01-06-PLAN.md — AgentPolicyReconciler: watches ClusterAgentPolicy + Namespaces, merges OTEL+resilience
 
 ### Phase 2: Mandatory Auth
 **Goal**: Service-account-token auth is active and enforced cluster-wide; no A2A call can succeed without a valid SA token; cross-stack permission grants are declarable via CRD.
@@ -115,7 +123,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Runtime Foundation | 0/TBD | Not started | - |
+| 1. Runtime Foundation | 0/6 | In progress | - |
 | 2. Mandatory Auth | 0/TBD | Not started | - |
 | 3. Skill-Resolver + Composable CRDs | 0/TBD | Not started | - |
 | 4. Platform Stack Deployment | 0/TBD | Not started | - |
