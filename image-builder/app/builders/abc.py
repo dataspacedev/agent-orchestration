@@ -29,7 +29,7 @@ class Builder(ABC):
         # The type annotation satisfies static analysis while the pragma below
         # prevents the "empty generator" false-positive.
         return  # pragma: no cover
-        yield  # make this an async generator to satisfy type checkers  # noqa: unreachable
+        yield  # make this an async generator to satisfy type checkers
 
 
 __all__ = ["Builder"]

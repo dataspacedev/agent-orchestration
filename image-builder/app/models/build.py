@@ -2,11 +2,10 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 # ── Source models ─────────────────────────────────────────────────────────────
 
@@ -72,7 +71,7 @@ Runtime = Annotated[PythonRuntime | NodeRuntime | RawRuntime, Field(discriminato
 # ── Build status ──────────────────────────────────────────────────────────────
 
 
-class BuildStatus(str, Enum):
+class BuildStatus(StrEnum):
     pending = "pending"
     running = "running"
     succeeded = "succeeded"
