@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: "Completed quick-1-01: SERP scraping agent"
-last_updated: "2026-05-02T02:20:55.822Z"
-last_activity: 2026-04-22 — Roadmap created; 49 requirements mapped across 7 phases
+stopped_at: "Completed quick-2-01: image-builder service"
+last_updated: "2026-05-02T20:27:00Z"
+last_activity: 2026-05-02 — Completed quick task 2: image-builder service with kaniko, discriminated unions, Alembic
 progress:
   total_phases: 7
   completed_phases: 0
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-21)
 Phase: 1 of 7 (Runtime Foundation)
 Plan: 0 of TBD in current phase
 Status: Ready to plan
-Last activity: 2026-05-02 - Completed quick task 1: Build SERP scraping agent with proxy rotation, user-agent randomization, human-like delays, and headless browser support
+Last activity: 2026-05-02 - Completed quick task 2: image-builder service (FastAPI + KanikoBuilder + Pydantic v2 discriminated unions + SQLAlchemy + Alembic)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -77,9 +77,10 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 1 | Build SERP scraping agent with proxy rotation, user-agent randomization, human-like delays, and headless browser support | 2026-05-02 | 1db59ea | [1-build-serp-scraping-agent-with-proxy-rot](./quick/1-build-serp-scraping-agent-with-proxy-rot/) |
+| 2 | Build image-builder service: FastAPI + KanikoBuilder (k8s BatchV1 Jobs), Pydantic v2 discriminated unions (Source/Runtime), SQLAlchemy BuildJob model, Alembic migration, RBAC + deployment manifests | 2026-05-02 | 2f2b7e3 | [2-build-image-builder-service-schemas-exte](./quick/2-build-image-builder-service-schemas-exte/) |
 
 ## Session Continuity
 
-Last session: 2026-05-02T02:20:55.819Z
-Stopped at: Completed quick-1-01: SERP scraping agent
+Last session: 2026-05-02T20:27:00Z
+Stopped at: Completed quick-2-01: image-builder service
 Resume file: None
