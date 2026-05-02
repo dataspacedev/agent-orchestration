@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, patch
 
 import pytest
 from pydantic import ValidationError
 
 from serp_agent.config import SerpConfig
-from serp_agent.proxy import ProxyPool, UA_POOL, human_delay, random_user_agent
-
+from serp_agent.proxy import UA_POOL, ProxyPool, human_delay, random_user_agent
 
 # ---------------------------------------------------------------------------
 # ProxyPool tests
