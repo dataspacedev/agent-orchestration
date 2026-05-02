@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from serp_agent.agent import SerpAgent
+from serp_agent.browser import BrowserSession
 from serp_agent.config import SerpConfig
+from serp_agent.proxy import ProxyPool
 
-__all__ = ["SerpAgent", "SerpConfig"]
+__all__ = ["BrowserSession", "ProxyPool", "SerpAgent", "SerpConfig"]
