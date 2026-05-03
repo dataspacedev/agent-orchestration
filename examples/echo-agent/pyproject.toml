@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[project]
+name = "echo-agent"
+version = "0.1.0"
+description = "Example A2A echo agent"
+requires-python = ">=3.13"
+dependencies = [
+    "a2a-sdk[http-server]==0.3.26",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32.0",
+]

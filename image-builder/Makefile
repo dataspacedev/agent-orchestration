@@ -1,3 +1,4 @@
+
 PYTHON     := python3
 VENV_DIR   := .venv
 VENV_BIN   := $(VENV_DIR)/bin
@@ -12,14 +13,16 @@ HOST       := 0.0.0.0
 PORT       := 8006
 MSG        ?= "new migration"
 
-IMG        ?= image-builder:latest
-NAMESPACE  ?= agent-system
+IMG          ?= image-builder:latest
+NAMESPACE    ?= agent-system
+KIND_CLUSTER ?= kind
 
 .DEFAULT_GOAL := help
 
 .PHONY: help venv activate install install-dev run test lint typecheck check clean \
         db-up db-down db-migrate db-rollback db-revision db-reset \
-        docker-build docker-push deploy undeploy port-forward k8s-logs k8s-status
+        docker-build docker-push deploy undeploy port-forward k8s-logs k8s-status \
+        deploy-db undeploy-db
 
 help:
 	@echo "Usage: make <target>"
@@ -44,7 +47,9 @@ help:
 	@echo ""
 	@echo "  docker-build   Build the container image (IMG=$(IMG))"
 	@echo "  docker-push    Push the container image to a registry"
-	@echo "  deploy         Build image and deploy service to the cluster"
+	@echo "  deploy-db      Deploy postgres to the cluster"
+	@echo "  undeploy-db    Remove postgres from the cluster"
+	@echo "  deploy         Build image and deploy service to the cluster (runs deploy-db first)"
 	@echo "  undeploy       Remove service from the cluster"
 	@echo "  port-forward   Forward cluster port to localhost:$(PORT)"
 	@echo "  k8s-logs       Tail API pod logs"
@@ -129,11 +134,23 @@ clean:
 docker-build:
 	docker build --platform linux/arm64 -t $(IMG) .
 
+build-image: docker-build ## Alias for docker-build
+
+kind-load: ## Load image into local kind cluster
+	kind load docker-image $(IMG) --name $(KIND_CLUSTER)
+
 docker-push:
 	docker push $(IMG)
 
-deploy: docker-build
+deploy-db:
 	kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
+	kubectl apply -f config/postgres/
+	kubectl -n $(NAMESPACE) rollout status deployment/image-builder-postgres --timeout=120s
+
+undeploy-db:
+	kubectl delete -f config/postgres/ --ignore-not-found
+
+deploy: docker-build deploy-db
 	kubectl apply -f config/rbac.yaml
 	kubectl apply -f config/api.yaml
 	kubectl -n $(NAMESPACE) rollout status deployment/image-builder --timeout=120s

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: serp-agent
+  namespace: agent-system
+data:
+  SERP_SEARCH_URL: "https://html.duckduckgo.com/html/?q={query}"
+  SERP_USE_BROWSER: "false"
+  SERP_HEADLESS: "true"
+  SERP_TIMEOUT_MS: "30000"
+  SERP_QUERY: "python programming"

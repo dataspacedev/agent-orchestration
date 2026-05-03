@@ -67,7 +67,7 @@ class K8sAgentClient:
             logger.warning("K8s config unavailable, CRD sync disabled: %s", exc)
 
     @property
-    def _ready(self) -> bool:
+    def is_ready(self) -> bool:
         return self._api_client is not None
 
     async def close(self) -> None:
@@ -78,7 +78,7 @@ class K8sAgentClient:
         return client.CustomObjectsApi(self._api_client)
 
     async def apply(self, crd_name: str, spec_payload: dict[str, Any]) -> None:
-        if not self._ready:
+        if not self.is_ready:
             raise RuntimeError("K8s client not initialized")
         body = {
             "apiVersion": f"{_GROUP}/{_VERSION}",
@@ -110,7 +110,7 @@ class K8sAgentClient:
             logger.info("patched Agent CRD %s", crd_name)
 
     async def delete(self, crd_name: str) -> None:
-        if not self._ready:
+        if not self.is_ready:
             raise RuntimeError("K8s client not initialized")
         api = self._custom_api()
         try:

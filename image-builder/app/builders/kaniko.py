@@ -1,9 +1,10 @@
 """KanikoBuilder — dispatches kubernetes BatchV1 Jobs using kaniko."""
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 from collections.abc import AsyncIterator
-from typing import Any
 
 from kubernetes_asyncio import client, config
 from kubernetes_asyncio.client import ApiClient
@@ -13,6 +14,7 @@ from app.builders.abc import Builder
 from app.db.models.build_job import BuildJob
 from app.models.build import (
     BuildRequest,
+    ContainerConfig,
     GitSource,
     InlineSource,
     NodeRuntime,
@@ -23,24 +25,47 @@ from app.models.build import (
 logger = logging.getLogger(__name__)
 
 
+def _apply_container_config(lines: list[str], cfg: ContainerConfig) -> None:
+    """Append ContainerConfig directives to an in-progress Dockerfile line list."""
+    for key, value in cfg.env.items():
+        lines.append(f"ENV {key}={value!r}")
+    for port in cfg.expose:
+        lines.append(f"EXPOSE {port}")
+    for key, value in cfg.labels.items():
+        lines.append(f'LABEL {key}="{value}"')
+    if cfg.user:
+        lines.append(f"USER {cfg.user}")
+    if cfg.entrypoint is not None:
+        lines.append(f"ENTRYPOINT {json.dumps(cfg.entrypoint)}")
+    if cfg.cmd is not None:
+        lines.append(f"CMD {json.dumps(cfg.cmd)}")
+
+
 def _generate_dockerfile(request: BuildRequest) -> str | None:
     """Return a Dockerfile string for generated runtimes, or None for RawRuntime."""
     rt = request.runtime
-    if isinstance(rt, PythonRuntime):
-        packages = " ".join(rt.packages) if rt.packages else ""
-        lines = [f"FROM python:{rt.version}"]
-        if packages:
-            lines.append(f"RUN pip install {packages}")
-        return "\n".join(lines)
-    if isinstance(rt, NodeRuntime):
-        packages = " ".join(rt.packages) if rt.packages else ""
-        lines = [f"FROM node:{rt.version}"]
-        if packages:
-            lines.append(f"RUN npm install -g {packages}")
-        return "\n".join(lines)
+    cfg = request.container
+
     if isinstance(rt, RawRuntime):
         return None  # caller uses rt.dockerfile directly
-    return None  # unreachable
+
+    if isinstance(rt, PythonRuntime):
+        lines = [f"FROM python:{rt.version}-slim"]
+        lines.append(f"WORKDIR {cfg.workdir}")
+        lines.append("COPY . .")
+        if rt.packages:
+            lines.append(f"RUN pip install --no-cache-dir {' '.join(rt.packages)}")
+    elif isinstance(rt, NodeRuntime):
+        lines = [f"FROM node:{rt.version}-slim"]
+        lines.append(f"WORKDIR {cfg.workdir}")
+        lines.append("COPY . .")
+        if rt.packages:
+            lines.append(f"RUN npm install {' '.join(rt.packages)}")
+    else:
+        return None  # unreachable
+
+    _apply_container_config(lines, cfg)
+    return "\n".join(lines)
 
 
 class KanikoBuilder(Builder):
@@ -52,12 +77,20 @@ class KanikoBuilder(Builder):
         kaniko_image: str,
         builder_namespace: str,
         in_cluster: bool = True,
+        registry_secret: str | None = None,
+        registry_insecure: bool = False,
+        build_timeout: float = 600.0,
+        build_poll_interval: float = 5.0,
         k8s_api_client: ApiClient | None = None,
     ) -> None:
         self._namespace = namespace
         self._kaniko_image = kaniko_image
         self._builder_namespace = builder_namespace
         self._in_cluster = in_cluster
+        self._registry_secret = registry_secret
+        self._registry_insecure = registry_insecure
+        self._build_timeout = build_timeout
+        self._build_poll_interval = build_poll_interval
         # If an external ApiClient is injected (e.g. in tests), use it directly.
         self._api_client: ApiClient | None = k8s_api_client
 
@@ -112,6 +145,8 @@ class KanikoBuilder(Builder):
 
         # ── Build kaniko args ─────────────────────────────────────────────────
         kaniko_args: list[str] = [f"--destination={request.image_ref}"]
+        if self._registry_insecure:
+            kaniko_args.append("--insecure")
 
         source = request.source
         if isinstance(source, GitSource):
@@ -123,82 +158,84 @@ class KanikoBuilder(Builder):
             kaniko_args.append("--context=tar:///workspace/context.tar.gz")
 
         # ── ConfigMap for generated Dockerfiles ───────────────────────────────
-        volumes: list[dict[str, Any]] = []
-        volume_mounts: list[dict[str, Any]] = []
+        volumes: list[client.V1Volume] = []
+        volume_mounts: list[client.V1VolumeMount] = []
 
         if generated_dockerfile is not None:
             cm_name = f"image-builder-{job_id}-dockerfile"
             core_api = client.CoreV1Api(self._api_client)
-            configmap = client.V1ConfigMap(
-                metadata=client.V1ObjectMeta(
-                    name=cm_name,
-                    namespace=self._builder_namespace,
-                ),
-                data={"Dockerfile": dockerfile_content},
-            )
             await core_api.create_namespaced_config_map(
                 namespace=self._builder_namespace,
-                body=configmap,
+                body=client.V1ConfigMap(
+                    metadata=client.V1ObjectMeta(
+                        name=cm_name,
+                        namespace=self._builder_namespace,
+                    ),
+                    data={"Dockerfile": dockerfile_content},
+                ),
             )
-            volumes.append({
-                "name": "dockerfile",
-                "configMap": {"name": cm_name},
-            })
-            volume_mounts.append({
-                "name": "dockerfile",
-                "mountPath": "/workspace/Dockerfile",
-                "subPath": "Dockerfile",
-            })
+            volumes.append(client.V1Volume(
+                name="dockerfile",
+                config_map=client.V1ConfigMapVolumeSource(name=cm_name),
+            ))
+            volume_mounts.append(client.V1VolumeMount(
+                name="dockerfile",
+                mount_path="/workspace/Dockerfile",
+                sub_path="Dockerfile",
+            ))
             kaniko_args.append("--dockerfile=/workspace/Dockerfile")
 
         # ── Secret for inline source content ──────────────────────────────────
         if isinstance(source, InlineSource):
             secret_name = f"image-builder-{job_id}-context"
             core_api = client.CoreV1Api(self._api_client)
-            secret = client.V1Secret(
-                metadata=client.V1ObjectMeta(
-                    name=secret_name,
-                    namespace=self._builder_namespace,
-                ),
-                data={"context.tar.gz": source.content},
-            )
             await core_api.create_namespaced_secret(
                 namespace=self._builder_namespace,
-                body=secret,
+                body=client.V1Secret(
+                    metadata=client.V1ObjectMeta(
+                        name=secret_name,
+                        namespace=self._builder_namespace,
+                    ),
+                    data={"context.tar.gz": source.content},
+                ),
             )
-            volumes.append({
-                "name": "context",
-                "secret": {"secretName": secret_name},
-            })
-            volume_mounts.append({
-                "name": "context",
-                "mountPath": "/workspace/context.tar.gz",
-                "subPath": "context.tar.gz",
-            })
+            volumes.append(client.V1Volume(
+                name="context",
+                secret=client.V1SecretVolumeSource(secret_name=secret_name),
+            ))
+            volume_mounts.append(client.V1VolumeMount(
+                name="context",
+                mount_path="/workspace/context.tar.gz",
+                sub_path="context.tar.gz",
+            ))
+
+        # ── Registry push credentials (omitted for local/unauthenticated testing) ──
+        if self._registry_secret:
+            volumes.append(client.V1Volume(
+                name="registry-credentials",
+                secret=client.V1SecretVolumeSource(
+                    secret_name=self._registry_secret,
+                    items=[client.V1KeyToPath(key=".dockerconfigjson", path="config.json")],
+                ),
+            ))
+            volume_mounts.append(client.V1VolumeMount(
+                name="registry-credentials",
+                mount_path="/kaniko/.docker/config.json",
+                sub_path="config.json",
+                read_only=True,
+            ))
 
         # ── Job spec ──────────────────────────────────────────────────────────
-        k8s_volume_mounts = (
-            [
-                client.V1VolumeMount(
-                    name=vm["name"],
-                    mount_path=vm["mountPath"],
-                    sub_path=vm.get("subPath"),
-                )
-                for vm in volume_mounts
-            ]
-            if volume_mounts
-            else None
-        )
         container = client.V1Container(
             name="kaniko",
             image=self._kaniko_image,
             args=kaniko_args,
-            volume_mounts=k8s_volume_mounts,
+            volume_mounts=volume_mounts or None,
         )
         pod_spec = client.V1PodSpec(
             containers=[container],
             restart_policy="Never",
-            volumes=[client.V1Volume(**v) for v in volumes] if volumes else None,
+            volumes=volumes or None,
         )
         job_spec = client.V1JobSpec(
             template=client.V1PodTemplateSpec(spec=pod_spec),
@@ -242,6 +279,42 @@ class KanikoBuilder(Builder):
             if exc.status != 404:
                 raise
             logger.debug("Job %s already absent (cancel is a no-op)", job_name)
+
+    async def wait_for_completion(self, job_id: str) -> bool:
+        """Poll the kaniko Job until it succeeds or fails.
+
+        Returns True on success, False on failure or timeout.
+        """
+        job_name = f"image-builder-{job_id}"
+        batch_api = client.BatchV1Api(self._api_client)
+        deadline = asyncio.get_event_loop().time() + self._build_timeout
+
+        while True:
+            remaining = deadline - asyncio.get_event_loop().time()
+            if remaining <= 0:
+                logger.warning("Build job %s timed out after %.0fs", job_id, self._build_timeout)
+                return False
+
+            try:
+                k8s_job = await batch_api.read_namespaced_job(
+                    name=job_name,
+                    namespace=self._builder_namespace,
+                )
+            except ApiException as exc:
+                if exc.status == 404:
+                    logger.warning("Build job %s: K8s Job not found during poll", job_id)
+                    return False
+                raise
+
+            status = k8s_job.status
+            if status.succeeded and status.succeeded > 0:
+                logger.info("Build job %s succeeded", job_id)
+                return True
+            if status.failed and status.failed > 0:
+                logger.warning("Build job %s failed (K8s Job backoff exhausted)", job_id)
+                return False
+
+            await asyncio.sleep(min(self._build_poll_interval, remaining))
 
     async def get_logs(self, job_id: str) -> AsyncIterator[str]:
         """Yield log lines from all pods belonging to the kaniko Job for *job_id*."""

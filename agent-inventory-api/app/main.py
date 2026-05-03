@@ -51,8 +51,8 @@ def create_app() -> FastAPI:
         version=settings.app_version,
         debug=settings.debug,
         lifespan=lifespan,
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url="/api/v1/docs",
+        redoc_url="/api/v1/redoc",
     )
 
     app.add_middleware(

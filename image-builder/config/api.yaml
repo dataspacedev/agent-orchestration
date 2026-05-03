@@ -25,6 +25,7 @@ spec:
       initContainers:
         - name: db-migrate
           image: image-builder:latest
+          imagePullPolicy: Never
           command: ["alembic", "upgrade", "head"]
           env:
             - name: DATABASE_URL
@@ -40,6 +41,7 @@ spec:
       containers:
         - name: image-builder
           image: image-builder:latest
+          imagePullPolicy: Never
           ports:
             - containerPort: 8000
               name: http
@@ -50,6 +52,8 @@ spec:
                   name: image-builder-db
                   key: database_url
             - name: K8S_IN_CLUSTER
+              value: "true"
+            - name: REGISTRY_INSECURE
               value: "true"
           resources:
             requests:

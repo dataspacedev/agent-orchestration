@@ -2,7 +2,11 @@ package controller
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"sort"
 
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -179,7 +183,10 @@ func (r *AgentReconciler) buildDeploymentSpec(agent *agentsv1alpha1.Agent) appsv
 		Replicas: &minReplicas,
 		Selector: &metav1.LabelSelector{MatchLabels: labels},
 		Template: corev1.PodTemplateSpec{
-			ObjectMeta: metav1.ObjectMeta{Labels: labels},
+			ObjectMeta: metav1.ObjectMeta{
+				Labels:      labels,
+				Annotations: map[string]string{"config/checksum": configChecksum(agent.Spec.Config)},
+			},
 			Spec: corev1.PodSpec{
 				ServiceAccountName:           agent.Name,
 				AutomountServiceAccountToken: ptr(false),
@@ -418,6 +425,21 @@ func resourceLabels(agent *agentsv1alpha1.Agent) map[string]string {
 
 func configMapName(agent *agentsv1alpha1.Agent) string {
 	return agent.Name + "-config"
+}
+
+func configChecksum(config map[string]string) string {
+	keys := make([]string, 0, len(config))
+	for k := range config {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	ordered := make([][2]string, len(keys))
+	for i, k := range keys {
+		ordered[i] = [2]string{k, config[k]}
+	}
+	b, _ := json.Marshal(ordered)
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:8])
 }
 
 func agentPort(agent *agentsv1alpha1.Agent) int32 {

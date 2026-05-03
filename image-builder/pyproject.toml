@@ -19,6 +19,7 @@ dependencies = [
     "asyncpg>=0.30.0",
     "alembic>=1.14.0",
     "kubernetes-asyncio>=29.0.0",
+    "python-multipart>=0.0.12",
 ]
 
 [project.optional-dependencies]

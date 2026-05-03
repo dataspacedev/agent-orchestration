@@ -27,6 +27,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         kaniko_image=settings.kaniko_image,
         builder_namespace=settings.builder_namespace,
         in_cluster=settings.k8s_in_cluster,
+        registry_secret=settings.registry_secret,
+        registry_insecure=settings.registry_insecure,
+        build_timeout=settings.build_timeout,
+        build_poll_interval=settings.build_poll_interval,
     )
     await builder.setup()
     app.state.builder = builder

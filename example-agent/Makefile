@@ -14,7 +14,7 @@ CLUSTER_TYPE      ?= $(shell kubectl config current-context 2>/dev/null | \
           'rancher-desktop' if ctx == 'rancher-desktop' else \
           'docker-desktop')")
 CLUSTER_NAME      ?= kind
-INVENTORY_API_URL ?= http://localhost:8005
+INVENTORY_LOCAL_PORT ?= 18000
 
 # Mirrors make_crd_name() in the inventory API: lower-case, non-alphanumeric chars → "-"
 CRD_NAME  := $(shell python3 -c "import re; print(re.sub(r'[^a-z0-9]+','-','$(NAME)-$(VERSION)').strip('-'))")
@@ -50,7 +50,7 @@ help:
 	@echo "  VERSION           = $(VERSION)"
 	@echo "  IMG               = $(IMG)"
 	@echo "  NAMESPACE         = $(NAMESPACE)"
-	@echo "  INVENTORY_API_URL = $(INVENTORY_API_URL)"
+	@echo "  INVENTORY_LOCAL_PORT = $(INVENTORY_LOCAL_PORT)"
 	@echo "  CLUSTER_TYPE      = $(CLUSTER_TYPE)  (auto-detected; or kind|minikube|k3d|rancher-desktop|docker-desktop)"
 	@echo "  LOCAL_PORT        = $(LOCAL_PORT)"
 	@echo "  CRD_NAME          = $(CRD_NAME)"
@@ -82,11 +82,15 @@ docker-push:
 # ── Orchestrator API ──────────────────────────────────────────────────────────
 
 register:
-	@echo "Registering $(NAME) v$(VERSION) via $(INVENTORY_API_URL)..."
-	@HTTP_STATUS=$$(curl -s -o /tmp/.reg-resp.json -w '%{http_code}' \
-	    -X POST "$(INVENTORY_API_URL)/api/v1/agents" \
+	@echo "Registering $(NAME) v$(VERSION)..."
+	@kubectl -n $(NAMESPACE) port-forward svc/agent-inventory-api $(INVENTORY_LOCAL_PORT):8000 >/dev/null 2>&1 & \
+	PF_PID=$$!; \
+	sleep 2; \
+	HTTP_STATUS=$$(curl -s -o /tmp/.reg-resp.json -w '%{http_code}' \
+	    -X POST "http://localhost:$(INVENTORY_LOCAL_PORT)/api/v1/agents" \
 	    -H "Content-Type: application/json" \
 	    -d '$(AGENT_JSON)'); \
+	kill $$PF_PID 2>/dev/null; \
 	if [ "$$HTTP_STATUS" = "201" ]; then \
 	    echo "Registered $(NAME) v$(VERSION):"; \
 	    python3 -m json.tool /tmp/.reg-resp.json; \
@@ -100,15 +104,20 @@ register:
 
 unregister:
 	@echo "Unregistering $(NAME) v$(VERSION)..."
-	@ID=$$(curl -sf "$(INVENTORY_API_URL)/api/v1/agents" \
+	@kubectl -n $(NAMESPACE) port-forward svc/agent-inventory-api $(INVENTORY_LOCAL_PORT):8000 >/dev/null 2>&1 & \
+	PF_PID=$$!; \
+	sleep 2; \
+	ID=$$(curl -sf "http://localhost:$(INVENTORY_LOCAL_PORT)/api/v1/agents" \
 	    | python3 -c "import json,sys; \
 agents=json.load(sys.stdin); \
 a=next((x for x in agents if x['name']=='$(NAME)' and x['version']=='$(VERSION)'),None); \
 print(a['id'] if a else '')"); \
 	if [ -z "$$ID" ]; then \
+	    kill $$PF_PID 2>/dev/null; \
 	    echo "$(NAME) v$(VERSION) not found in inventory -- nothing to do."; \
 	else \
-	    curl -sf -X DELETE "$(INVENTORY_API_URL)/api/v1/agents/$$ID"; \
+	    curl -sf -X DELETE "http://localhost:$(INVENTORY_LOCAL_PORT)/api/v1/agents/$$ID"; \
+	    kill $$PF_PID 2>/dev/null; \
 	    echo "Unregistered $(NAME) v$(VERSION) (id=$$ID)."; \
 	fi
 

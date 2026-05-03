@@ -6,10 +6,12 @@ NAMESPACE ?= agent-system
 
 # Prefix image names with registry when set
 _prefix        := $(if $(REGISTRY),$(REGISTRY)/,)
-API_IMG        := $(_prefix)agent-inventory-api:$(TAG)
-CONTROLLER_IMG := $(_prefix)agent-controller:$(TAG)
-UI_IMG         := $(_prefix)agent-registry-ui:$(TAG)
-EXAMPLE_IMG    := $(_prefix)example-agent:$(TAG)
+API_IMG            := $(_prefix)agent-inventory-api:$(TAG)
+CONTROLLER_IMG     := $(_prefix)agent-controller:$(TAG)
+UI_IMG             := $(_prefix)agent-registry-ui:$(TAG)
+EXAMPLE_IMG        := $(_prefix)example-agent:$(TAG)
+SERP_IMG           := $(_prefix)serp-agent:$(TAG)
+IMAGE_BUILDER_IMG  := $(_prefix)image-builder:$(TAG)
 
 KIND_CLUSTER ?= kind
 
@@ -18,13 +20,18 @@ KIND_CLUSTER ?= kind
 .PHONY: help \
         dev-api dev-ui \
         build build-api build-controller build-ui build-example \
+        build-serp push-serp load-serp \
+        build-image-builder load-image-builder deploy-image-builder undeploy-image-builder \
+        deploy-registry undeploy-registry \
         push push-api push-controller push-ui \
         load load-api load-controller load-ui \
         deploy deploy-namespace deploy-crds deploy-postgres \
         deploy-controller deploy-api deploy-ui \
+        deploy-serp undeploy-serp \
         undeploy undeploy-ui undeploy-api undeploy-controller \
         undeploy-postgres undeploy-crds \
         status logs-api logs-controller logs-ui \
+        logs-serp run-serp \
         port-forward-api port-forward-ui
 
 # ── Development ────────────────────────────────────────────────────────────────
@@ -51,9 +58,19 @@ build-ui: ## Build agent-registry-ui image
 build-example: ## Build example-agent image (must run from repo root)
 	docker build --platform $(PLATFORM) -f example-agent/Dockerfile -t $(EXAMPLE_IMG) .
 
+build-serp: ## Build serp-agent image (must run from repo root)
+	docker build --platform $(PLATFORM) -f serp-agent/Dockerfile -t $(SERP_IMG) . && \
+	docker tag $(SERP_IMG) serp-agent:0.1.0
+
+build-image-builder: ## Build image-builder image
+	docker build --platform $(PLATFORM) -t $(IMAGE_BUILDER_IMG) ./image-builder
+
 # ── Push ───────────────────────────────────────────────────────────────────────
 
 push: push-api push-controller push-ui ## Push all images to registry
+
+push-serp: ## Push serp-agent
+	docker push $(SERP_IMG)
 
 push-api: ## Push agent-inventory-api
 	docker push $(API_IMG)
@@ -67,6 +84,12 @@ push-ui: ## Push agent-registry-ui
 # ── Load (local kind cluster) ──────────────────────────────────────────────────
 
 load: load-api load-controller load-ui ## Load all images into local kind cluster
+
+load-serp: ## Load serp-agent into kind
+	kind load docker-image $(SERP_IMG) --name $(KIND_CLUSTER)
+
+load-image-builder: ## Load image-builder into kind
+	kind load docker-image $(IMAGE_BUILDER_IMG) --name $(KIND_CLUSTER)
 
 load-api: ## Load agent-inventory-api into kind
 	kind load docker-image $(API_IMG) --name $(KIND_CLUSTER)
@@ -104,6 +127,30 @@ deploy-ui: ## Deploy agent-registry-ui
 	kubectl apply -f agent-registry-ui/config/
 	kubectl -n $(NAMESPACE) rollout status deployment/agent-registry-ui --timeout=60s
 
+deploy-image-builder: build-image-builder ## Build and deploy image-builder (Rancher Desktop: no load needed)
+	kubectl apply -f image-builder/config/rbac.yaml
+	kubectl apply -f image-builder/config/api.yaml
+	kubectl -n $(NAMESPACE) rollout status deployment/image-builder --timeout=120s
+
+undeploy-image-builder: ## Remove image-builder from the cluster
+	kubectl delete -f image-builder/config/api.yaml --ignore-not-found=true
+	kubectl delete -f image-builder/config/rbac.yaml --ignore-not-found=true
+
+deploy-registry: ## Deploy in-cluster registry for local image pushes (HTTP, no auth)
+	kubectl apply -f image-builder/config/registry.yaml
+	kubectl -n $(NAMESPACE) rollout status deployment/registry --timeout=60s
+
+undeploy-registry: ## Remove in-cluster registry
+	kubectl delete -f image-builder/config/registry.yaml --ignore-not-found=true
+
+deploy-serp: ## Deploy serp-agent: Agent CR (HTTP service) + CronJob (requires agent-system namespace)
+	kubectl apply -f serp-agent/config/rbac.yaml
+	kubectl apply -f serp-agent/config/secret.yaml
+	kubectl apply -f serp-agent/config/configmap.yaml
+	kubectl apply -f serp-agent/config/cronjob.yaml
+	kubectl apply -f serp-agent/config/agent.yaml
+	kubectl -n $(NAMESPACE) wait agent/serp-agent-0-1-0 --for=condition=Ready=True --timeout=120s
+
 redeploy-ui: build-ui ## Rebuild image and restart agent-registry-ui pod
 	kubectl -n $(NAMESPACE) rollout restart deployment/agent-registry-ui
 	kubectl -n $(NAMESPACE) rollout status deployment/agent-registry-ui --timeout=60s
@@ -128,6 +175,13 @@ undeploy-postgres: ## Remove PostgreSQL
 undeploy-crds: ## Remove Agent CRDs (deletes all Agent custom resources)
 	kubectl delete -f agent-controller/config/crd/bases/ --ignore-not-found=true
 
+undeploy-serp: ## Remove serp-agent (Agent CR + CronJob)
+	kubectl delete -f serp-agent/config/agent.yaml --ignore-not-found=true
+	kubectl delete -f serp-agent/config/cronjob.yaml --ignore-not-found=true
+	kubectl delete -f serp-agent/config/configmap.yaml --ignore-not-found=true
+	kubectl delete -f serp-agent/config/secret.yaml --ignore-not-found=true
+	kubectl delete -f serp-agent/config/rbac.yaml --ignore-not-found=true
+
 # ── Observe ────────────────────────────────────────────────────────────────────
 
 status: ## Show pods, services, and deployments in agent-system
@@ -141,6 +195,12 @@ logs-controller: ## Stream agent-controller logs
 
 logs-ui: ## Stream agent-registry-ui logs
 	kubectl -n $(NAMESPACE) logs -l app.kubernetes.io/name=agent-registry-ui --follow --tail=100
+
+logs-serp: ## Stream logs from the most recent serp-agent job pod
+	kubectl -n $(NAMESPACE) logs -l app.kubernetes.io/name=serp-agent --follow --tail=100
+
+run-serp: ## Manually trigger a one-off serp-agent job from the CronJob
+	kubectl -n $(NAMESPACE) create job --from=cronjob/serp-agent serp-agent-manual-$(shell date +%s)
 
 port-forward-api: ## Forward localhost:8000 → agent-inventory-api service
 	kubectl -n $(NAMESPACE) port-forward svc/agent-inventory-api 8000:8000

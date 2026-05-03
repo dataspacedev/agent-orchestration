@@ -36,3 +36,12 @@ export interface Agent {
   created_at: string;
   updated_at: string;
 }
+
+export interface AgentCreatePayload {
+  name: string;
+  version: string;
+  description?: string;
+  status?: string;
+  deployment_state?: DeploymentState;
+  spec: AgentSpec;
+}

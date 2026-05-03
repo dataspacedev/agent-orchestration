@@ -10,6 +10,20 @@ class DeploymentState(str, Enum):
     deleted = "deleted"
 
 
+class OutboxEventType(str, Enum):
+    created = "CREATED"
+    updated = "UPDATED"
+    deleted = "DELETED"
+    stopped = "STOPPED"
+
+
+class OutboxStatus(str, Enum):
+    pending = "pending"
+    processing = "processing"
+    completed = "completed"
+    failed = "failed"
+
+
 class ResourceRequirements(BaseModel):
     requests: dict[str, str] | None = None
     limits: dict[str, str] | None = None

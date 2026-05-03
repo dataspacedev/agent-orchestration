@@ -1,0 +1,27 @@
+apiVersion: agents.orchestration.io/v1alpha1
+kind: Agent
+metadata:
+  name: serp-agent-0-1-0
+  namespace: agent-system
+spec:
+  image: "serp-agent:latest"
+  port: 8080
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+  config:
+    LOG_LEVEL: "info"
+    SERP_SEARCH_URL: "https://html.duckduckgo.com/html/?q={query}"
+    SERP_USE_BROWSER: "false"
+    SERP_HEADLESS: "true"
+    SERP_TIMEOUT_MS: "30000"
+    SERP_PROXIES: "http://user:pass@proxy1:8080,http://user:pass@proxy2:8080"
+    AGENT_URL: "http://serp-agent-0-1-0.agent-system.svc.cluster.local:8080"
+  scaling:
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 80

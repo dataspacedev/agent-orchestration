@@ -1,11 +1,29 @@
 """Pydantic v2 schemas for the image-builder service."""
 from __future__ import annotations
 
+import base64
 from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+# ── Container config ──────────────────────────────────────────────────────────
+
+
+class ContainerConfig(BaseModel):
+    """OCI container-level config applied on top of any generated runtime."""
+
+    model_config = ConfigDict(frozen=True)
+
+    cmd: list[str] | None = None
+    entrypoint: list[str] | None = None
+    workdir: str = "/app"
+    env: dict[str, str] = Field(default_factory=dict)
+    expose: list[int] = Field(default_factory=list)
+    labels: dict[str, str] = Field(default_factory=dict)
+    user: str | None = None
 
 # ── Source models ─────────────────────────────────────────────────────────────
 
@@ -27,7 +45,20 @@ class InlineSource(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     type: Literal["inline"] = "inline"
-    content: str  # base64-encoded tar.gz
+    content: str  # base64-encoded tar.gz — newlines are stripped automatically
+
+    @field_validator("content")
+    @classmethod
+    def _normalize_and_validate_base64(cls, v: str) -> str:
+        # Strip whitespace so macOS `base64` (which wraps at 76 chars) works out of the box
+        v = v.strip().replace("\n", "").replace("\r", "")
+        if not v:
+            raise ValueError("content must be a non-empty base64-encoded tar.gz")
+        try:
+            base64.b64decode(v, validate=True)
+        except Exception as exc:
+            raise ValueError(f"content is not valid base64: {exc}") from exc
+        return v
 
 
 Source = Annotated[GitSource | InlineSource, Field(discriminator="type")]
@@ -88,6 +119,7 @@ class BuildRequest(BaseModel):
     source: Source
     runtime: Runtime
     image_ref: str
+    container: ContainerConfig = Field(default_factory=ContainerConfig)
 
 
 class BuildJobResponse(BaseModel):
@@ -106,12 +138,23 @@ class BuildJobResponse(BaseModel):
     updated_at: datetime
 
 
+class BuildListResponse(BaseModel):
+    """Paginated list of build jobs."""
+
+    items: list[BuildJobResponse]
+    total: int
+    limit: int
+    offset: int
+
+
 __all__ = [
     "Source",
     "Runtime",
     "BuildRequest",
     "BuildJobResponse",
+    "BuildListResponse",
     "BuildStatus",
+    "ContainerConfig",
     "GitSource",
     "InlineSource",
     "PythonRuntime",

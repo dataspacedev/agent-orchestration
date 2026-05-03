@@ -5,10 +5,10 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from pydantic import ValidationError
 
 from serp_agent.config import SerpConfig
-from serp_agent.proxy import UA_POOL, ProxyPool, human_delay, random_user_agent
+from serp_agent.fingerprint import UA_POOL, human_delay, random_user_agent
+from serp_agent.proxy import ProxyPool
 
 # ---------------------------------------------------------------------------
 # ProxyPool tests
@@ -71,16 +71,16 @@ def test_serp_config_valid() -> None:
     assert cfg.timeout_ms == 30_000
 
 
-def test_serp_config_missing_proxies_raises() -> None:
-    """Missing proxies field raises pydantic ValidationError."""
-    with pytest.raises(ValidationError):
-        SerpConfig()  # type: ignore[call-arg]
+def test_serp_config_defaults_to_no_proxies() -> None:
+    """SerpConfig() defaults proxies to [] (direct connection)."""
+    cfg = SerpConfig()
+    assert cfg.proxies == []
 
 
-def test_serp_config_empty_proxies_raises() -> None:
-    """Empty proxies list raises pydantic ValidationError (min_length=1)."""
-    with pytest.raises(ValidationError):
-        SerpConfig(proxies=[])
+def test_serp_config_empty_proxies_allowed() -> None:
+    """Empty proxies list is valid and means direct connection."""
+    cfg = SerpConfig(proxies=[])
+    assert cfg.proxies == []
 
 
 # ---------------------------------------------------------------------------

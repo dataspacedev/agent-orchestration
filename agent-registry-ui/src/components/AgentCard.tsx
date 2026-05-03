@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Agent, ResourceRequirements } from '../types/agent';
 import { DeploymentBadge, StatusBadge } from './StatusBadge';
 
@@ -18,12 +19,33 @@ function ResourceChip({ label, resources }: { label: string; resources?: Resourc
   );
 }
 
-export function AgentCard({ agent }: { agent: Agent }) {
+export function AgentCard({
+  agent,
+  onStop,
+  onDeploy,
+}: {
+  agent: Agent;
+  onStop?: () => Promise<void>;
+  onDeploy?: () => Promise<void>;
+}) {
+  const [stopping, setStopping] = useState(false);
+  const [deploying, setDeploying] = useState(false);
   const { name, version, description, status, deployment_state, spec, created_at, updated_at } = agent;
+
+  async function handleStop() {
+    if (!onStop) return;
+    setStopping(true);
+    try { await onStop(); } finally { setStopping(false); }
+  }
+
+  async function handleDeploy() {
+    if (!onDeploy) return;
+    setDeploying(true);
+    try { await onDeploy(); } finally { setDeploying(false); }
+  }
   const { image, port, resources, scaling } = spec;
   const hasResources = resources?.requests || resources?.limits;
   const hasScaling = scaling?.min_replicas !== undefined || scaling?.max_replicas !== undefined;
-
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col overflow-hidden">
       <div className="px-5 pt-5 pb-4">
@@ -98,6 +120,58 @@ export function AgentCard({ agent }: { agent: Agent }) {
           <span>Created {formatDate(created_at)}</span>
           <span>Updated {formatDate(updated_at)}</span>
         </div>
+        {deployment_state === 'running' && onStop && (
+          <div className="mt-3">
+            <button
+              onClick={handleStop}
+              disabled={stopping}
+              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 bg-white hover:bg-red-50 border border-red-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {stopping ? (
+                <>
+                  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Stopping…
+                </>
+              ) : (
+                <>
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <rect x="5" y="5" width="10" height="10" rx="1" />
+                  </svg>
+                  Stop agent
+                </>
+              )}
+            </button>
+          </div>
+        )}
+        {deployment_state === 'stopped' && onDeploy && (
+          <div className="mt-3">
+            <button
+              onClick={handleDeploy}
+              disabled={deploying}
+              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-white hover:bg-emerald-50 border border-emerald-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {deploying ? (
+                <>
+                  <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Deploying…
+                </>
+              ) : (
+                <>
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M6.3 2.841A1.5 1.5 0 004 4.11v11.78a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                  </svg>
+                  Deploy agent
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

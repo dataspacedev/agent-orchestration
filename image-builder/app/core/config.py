@@ -22,8 +22,20 @@ class Settings(BaseSettings):
     # Kaniko build executor
     kaniko_image: str = "gcr.io/kaniko-project/executor:latest"
 
-    # Namespace where kaniko Jobs are created
-    builder_namespace: str = "image-builder-system"
+    # Namespace where kaniko Jobs are created (default: same ns as the service)
+    builder_namespace: str = "agent-system"
+
+    # K8s secret name containing .dockerconfigjson for registry push auth.
+    # Leave unset when pushing to an unauthenticated local registry.
+    registry_secret: str | None = None
+
+    # Set true when the destination registry is HTTP-only (e.g. in-cluster registry:2).
+    # Passes --insecure to kaniko so it skips TLS for the push.
+    registry_insecure: bool = False
+
+    # How long to wait for a kaniko Job to complete before marking the build failed
+    build_timeout: float = 600.0
+    build_poll_interval: float = 5.0
 
 
 settings = Settings()

@@ -1,7 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Agent } from '../types/agent';
-import { fetchAgents } from '../api/agents';
+import { fetchAgents, stopAgent, deployAgent } from '../api/agents';
 import { AgentCard } from '../components/AgentCard';
+import { Nav } from '../components/Nav';
+import type { Page } from '../components/Nav';
+
+interface Props {
+  page: Page;
+  onNavigate: (page: Page) => void;
+}
 
 function RefreshIcon({ spinning }: { spinning: boolean }) {
   return (
@@ -21,7 +28,7 @@ function RefreshIcon({ spinning }: { spinning: boolean }) {
   );
 }
 
-export function InventoryPage() {
+export function InventoryPage({ page, onNavigate }: Props) {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +50,16 @@ export function InventoryPage() {
 
   const runningCount = agents.filter((a) => a.deployment_state === 'running').length;
 
+  async function handleStop(agentId: string) {
+    await stopAgent(agentId);
+    await loadAgents();
+  }
+
+  async function handleDeploy(agentId: string) {
+    await deployAgent(agentId);
+    await loadAgents();
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-slate-900 border-b border-slate-800">
@@ -55,14 +72,18 @@ export function InventoryPage() {
                 : `${agents.length} agent${agents.length !== 1 ? 's' : ''} registered${agents.length > 0 ? ` \u00b7 ${runningCount} running` : ''}`}
             </p>
           </div>
-          <button
-            onClick={loadAgents}
-            disabled={loading}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <RefreshIcon spinning={loading} />
-            Refresh
-          </button>
+          <div className="flex items-center gap-3">
+            <Nav current={page} onNavigate={onNavigate} />
+            <div className="w-px h-5 bg-slate-700" />
+            <button
+              onClick={loadAgents}
+              disabled={loading}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshIcon spinning={loading} />
+              Refresh
+            </button>
+          </div>
         </div>
       </header>
 
@@ -86,7 +107,12 @@ export function InventoryPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {agents.map((agent) => (
-              <AgentCard key={agent.id} agent={agent} />
+              <AgentCard
+                key={agent.id}
+                agent={agent}
+                onStop={() => handleStop(agent.id)}
+                onDeploy={() => handleDeploy(agent.id)}
+              />
             ))}
           </div>
         )}
